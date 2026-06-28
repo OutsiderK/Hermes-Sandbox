@@ -1,0 +1,244 @@
+name: hermes-secure
+
+services:
+  state-init:
+    image: ${STATE_INIT_IMAGE_REF:?Run .\\scripts\\hermes.ps1 init first}
+    container_name: hermes-secure-state-init
+    user: "0:0"
+    network_mode: "none"
+    restart: "no"
+    read_only: true
+    pids_limit: 32
+    mem_limit: 64m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - hermes-data:/opt/data
+      - mihomo-data:/var/lib/mihomo
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p \
+          /opt/data/workspace \
+          /opt/data/outbox \
+          /opt/data/cache \
+          /opt/data/logs \
+          /opt/data/.local \
+          /var/lib/mihomo \
+          /var/lib/mihomo/providers
+        chown 10000:10000 \
+          /opt/data \
+          /opt/data/workspace \
+          /opt/data/outbox \
+          /opt/data/cache \
+          /opt/data/logs \
+          /opt/data/.local
+        chown 10002:10002 \
+          /var/lib/mihomo \
+          /var/lib/mihomo/providers
+        chmod 0700 \
+          /opt/data \
+          /opt/data/workspace \
+          /opt/data/outbox \
+          /opt/data/cache \
+          /opt/data/logs \
+          /opt/data/.local
+        chmod 0700 \
+          /var/lib/mihomo \
+          /var/lib/mihomo/providers
+
+  netguard:
+    build:
+      context: .
+      dockerfile: netguard/Dockerfile
+      args:
+        NETGUARD_BASE_IMAGE: ${NETGUARD_IMAGE_REF:?Run .\\scripts\\hermes.ps1 init first}
+    image: ${NETGUARD_RUNTIME_IMAGE:-hermes-secure-netguard:local}
+    container_name: hermes-secure-netguard
+    restart: unless-stopped
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:9119:9119"
+      - "127.0.0.1:9090:9090"
+    tmpfs:
+      - /run:rw,nosuid,nodev,noexec,size=16m,mode=0755
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+    environment:
+      HERMES_UID: "10000"
+      PROXY_UID: "10001"
+      MIHOMO_UID: "10002"
+      HERMES_LOOPBACK_TCP_PORTS: "${HERMES_LOOPBACK_TCP_PORTS:-3128,9119}"
+      MIHOMO_TCP_PORTS: "${MIHOMO_TCP_PORTS:-80,443,8443,2053,2083,2087,2096}"
+      PROXY_PORT: "3128"
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/local/sbin/netguard-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mihomo:
+    image: ${MIHOMO_IMAGE_REF:?Run .\\scripts\\hermes.ps1 init first}
+    container_name: hermes-secure-mihomo
+    user: "10002:10002"
+    network_mode: "service:netguard"
+    depends_on:
+      state-init:
+        condition: service_completed_successfully
+      netguard:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: ${MIHOMO_MEMORY_LIMIT:-512m}
+    cpus: ${MIHOMO_CPU_LIMIT:-1.0}
+    command: ["-d", "/var/lib/mihomo", "-f", "/etc/mihomo/config.yaml"]
+    volumes:
+      - type: bind
+        source: ./proxy/mihomo.yaml
+        target: /etc/mihomo/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: volume
+        source: mihomo-data
+        target: /var/lib/mihomo
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  hermes:
+    build:
+      context: .
+      dockerfile: Dockerfile.hermes
+      args:
+        HERMES_BASE_IMAGE: ${HERMES_IMAGE_REF:?Run .\\scripts\\hermes.ps1 init first}
+    image: ${HERMES_RUNTIME_IMAGE:-hermes-secure-runtime:local}
+    container_name: hermes-secure-hermes
+    user: "10000:10000"
+    network_mode: "service:netguard"
+    depends_on:
+      state-init:
+        condition: service_completed_successfully
+      netguard:
+        condition: service_healthy
+      mihomo:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: ${HERMES_MEMORY_LIMIT:-6g}
+    cpus: ${HERMES_CPU_LIMIT:-4.0}
+    stop_grace_period: 30s
+    shm_size: ${HERMES_SHM_SIZE:-1g}
+    environment:
+      HOME: /opt/data
+      HERMES_HOME: /opt/data
+      HERMES_WRITE_SAFE_ROOT: /opt/data
+      HERMES_GATEWAY_NO_SUPERVISE: "1"
+      HERMES_LAZY_INSTALL_TARGET: /opt/data/lazy-packages
+      PYTHONUSERBASE: /opt/data/.local
+      NPM_CONFIG_PREFIX: /opt/data/.local
+      XDG_CACHE_HOME: /opt/data/cache
+      HTTP_PROXY: http://127.0.0.1:3128
+      HTTPS_PROXY: http://127.0.0.1:3128
+      ALL_PROXY: http://127.0.0.1:3128
+      NO_PROXY: 127.0.0.1,localhost
+      TZ: ${TZ:-Asia/Singapore}
+    volumes:
+      - hermes-data:/opt/data
+      - type: bind
+        source: ./exchange/inbox
+        target: /input
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./secrets/hermes.env
+        target: /opt/data/.env
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+      - /run/hermes:rw,nosuid,nodev,noexec,size=16m,mode=0700
+    healthcheck:
+      test: ["CMD", "python", "/opt/secure/healthcheck.py"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  exporter:
+    profiles: ["tools"]
+    image: ${HERMES_RUNTIME_IMAGE:-hermes-secure-runtime:local}
+    user: "10000:10000"
+    network_mode: "none"
+    entrypoint: ["python", "/opt/secure/export_outbox.py"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 1g
+    volumes:
+      - type: volume
+        source: hermes-data
+        target: /opt/data
+        read_only: true
+      - type: bind
+        source: ./exports
+        target: /export
+        read_only: false
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777
+
+volumes:
+  hermes-data:
+    name: ${HERMES_DATA_VOLUME:-hermes-secure-data}
+  mihomo-data:
+    name: ${MIHOMO_DATA_VOLUME:-hermes-secure-mihomo-data}

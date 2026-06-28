@@ -1,0 +1,11 @@
+.env
+secrets/hermes.env
+proxy/mihomo.yaml
+exports/*
+!exports/.gitkeep
+exchange/inbox/*
+!exchange/inbox/.gitkeep
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

@@ -1,0 +1,8 @@
+.git
+.env
+secrets/hermes.env
+proxy/mihomo.yaml
+exports
+exchange/inbox
+__pycache__
+*.pyc

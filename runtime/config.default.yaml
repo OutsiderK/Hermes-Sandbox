@@ -1,0 +1,37 @@
+terminal:
+  backend: local
+  cwd: /opt/data/workspace
+  timeout: 300
+  home_mode: real
+  env_passthrough: []
+
+approvals:
+  mode: off
+
+skills:
+  write_approval: false
+  guard_agent_created: true
+
+memory:
+  write_approval: false
+
+checkpoints:
+  enabled: false
+
+delegation:
+  max_concurrent_children: 3
+  max_spawn_depth: 1
+
+security:
+  redact_secrets: true
+  website_blocklist:
+    enabled: true
+    domains:
+      - localhost
+      - "*.localhost"
+      - host.docker.internal
+      - gateway.docker.internal
+      - "*.local"
+
+display:
+  language: zh

@@ -1,0 +1,92 @@
+mixed-port: 7890
+allow-lan: false
+bind-address: 127.0.0.1
+mode: rule
+log-level: warning
+ipv6: false
+
+# Published by netguard only on Windows 127.0.0.1:9090.
+# Use a mihomo/Clash dashboard such as https://d.metacubex.one and connect it
+# to http://127.0.0.1:9090 with this secret.
+external-controller: 0.0.0.0:9090
+secret: "__MIHOMO_CONTROLLER_SECRET__"
+
+profile:
+  store-selected: true
+  store-fake-ip: false
+
+proxy-providers:
+  my-sub:
+    type: http
+    url: "__CLASH_SUBSCRIPTION_URL__"
+    interval: 86400
+    path: /var/lib/mihomo/providers/my-sub.yaml
+    health-check:
+      enable: true
+      interval: 600
+      url: https://www.gstatic.com/generate_204
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    use:
+      - my-sub
+    # Keeps mihomo startable before a subscription URL is configured. After the
+    # provider loads, choose a real node in the GUI.
+    proxies:
+      - DIRECT
+
+rules:
+  # Absolute denials. netguard repeats these at the IP layer as a backstop.
+  - IP-CIDR,0.0.0.0/8,REJECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,REJECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,REJECT,no-resolve
+  - IP-CIDR,127.0.0.0/8,REJECT,no-resolve
+  - IP-CIDR,169.254.0.0/16,REJECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,REJECT,no-resolve
+  - IP-CIDR,192.0.0.0/24,REJECT,no-resolve
+  - IP-CIDR,192.0.2.0/24,REJECT,no-resolve
+  - IP-CIDR,192.88.99.0/24,REJECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,REJECT,no-resolve
+  - IP-CIDR,198.18.0.0/15,REJECT,no-resolve
+  - IP-CIDR,198.51.100.0/24,REJECT,no-resolve
+  - IP-CIDR,203.0.113.0/24,REJECT,no-resolve
+  - IP-CIDR,224.0.0.0/4,REJECT,no-resolve
+  - IP-CIDR,240.0.0.0/4,REJECT,no-resolve
+  - DOMAIN,localhost,REJECT
+  - DOMAIN-SUFFIX,localhost,REJECT
+  - DOMAIN-SUFFIX,local,REJECT
+  - DOMAIN,host.docker.internal,REJECT
+  - DOMAIN,gateway.docker.internal,REJECT
+
+  # User-approved direct domains for mainland-reachable services. These remain
+  # explicit so important study/model services are easy to audit in diffs.
+  - DOMAIN,dictionary.cambridge.org,DIRECT
+  - DOMAIN-SUFFIX,cambridge.org,DIRECT
+  - DOMAIN-SUFFIX,oxfordlearnersdictionaries.com,DIRECT
+  - DOMAIN,cdns.eu1.gigya.com,DIRECT
+  - DOMAIN-SUFFIX,gigya.com,DIRECT
+  - DOMAIN,events.polarbyte.com,DIRECT
+  - DOMAIN,cloud.polarbyte.com,DIRECT
+  - DOMAIN,report.error-report.com,DIRECT
+  - DOMAIN-SUFFIX,coursera.org,DIRECT
+  - DOMAIN-SUFFIX,overleaf.com,DIRECT
+  - DOMAIN-SUFFIX,chaodong.me,DIRECT
+  - DOMAIN,box.nju.edu.cn,DIRECT
+  - DOMAIN,gaia.cs.umass.edu,DIRECT
+  - DOMAIN-SUFFIX,kimi.com,DIRECT
+  - DOMAIN-SUFFIX,xiaoqiumi.com,DIRECT
+  - DOMAIN-SUFFIX,csqaq.com,DIRECT
+  - DOMAIN-SUFFIX,aliyun.com,DIRECT
+  - DOMAIN-SUFFIX,cowtransfer.com,DIRECT
+  - DOMAIN-SUFFIX,njumatch.com,DIRECT
+  - DOMAIN,cslabcms.nju.edu.cn,DIRECT
+  - DOMAIN-SUFFIX,deepseek.com,DIRECT
+
+  # Mainland China domains/IPs go direct by default. Keep this after the
+  # absolute denials above so host, LAN, link-local and metadata ranges cannot
+  # be reopened by geo data or DNS behavior.
+  - GEOSITE,CN,DIRECT
+  - GEOIP,CN,DIRECT
+
+  - MATCH,PROXY
