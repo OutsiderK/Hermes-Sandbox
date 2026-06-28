@@ -45,6 +45,25 @@ iptables -w -A OUTPUT -m owner --uid-owner "$PROXY_UID" -j REJECT --reject-with 
 # subscriptions that try to route Hermes toward protected networks.
 iptables -w -A OUTPUT -m owner --uid-owner "$MIHOMO_UID" -d 127.0.0.11/32 -p udp --dport 53 -j ACCEPT
 iptables -w -A OUTPUT -m owner --uid-owner "$MIHOMO_UID" -d 127.0.0.11/32 -p tcp --dport 53 -j ACCEPT
+
+# Docker rewrites 127.0.0.11:53 to an internal random port before
+# the filter OUTPUT chain evaluates the packet. Allow only mihomo UID,
+# only loopback, and only Docker's exact embedded-DNS address.
+iptables -w -A OUTPUT \
+  -m owner --uid-owner "$MIHOMO_UID" \
+  -o lo \
+  -d 127.0.0.11/32 \
+  -p udp \
+  -j ACCEPT
+
+iptables -w -A OUTPUT \
+  -m owner --uid-owner "$MIHOMO_UID" \
+  -o lo \
+  -d 127.0.0.11/32 \
+  -p tcp \
+  -j ACCEPT
+
+
 for cidr in \
   0.0.0.0/8 \
   10.0.0.0/8 \
