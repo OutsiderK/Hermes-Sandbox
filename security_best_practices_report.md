@@ -46,7 +46,7 @@
 - Hermes 使用 `network_mode: "service:netguard"`，没有 host network。见 `compose.yaml:151`。
 - Hermes 持久状态是 Docker named volume `/opt/data`，不是 Windows 用户目录 bind。见 `compose.yaml:184-185`。
 - 输入目录 `./exchange/inbox` 只读挂载到 `/input`。见 `compose.yaml:186-191`。
-- 密钥文件 `./secrets/hermes.env` 只读挂载到 `/opt/data/.env`。见 `compose.yaml:192-197`。
+- 密钥源文件 `./secrets/hermes.env` 只读挂载到 `/run/secrets/hermes.env`，启动时复制到 tmpfs 中的 `/run/hermes/hermes.env` 作为运行副本。见 `compose.yaml:179-180`、`compose.yaml:193-198` 和 `runtime/run-stack.sh:38-60`。
 - Dockerfile 最终切换到非 root 用户，并移除常见 setuid/setgid 位。见 `Dockerfile.hermes:16-21`。
 - 运行入口拒绝 root、检查 rootfs 不可写、检查 `/input` 不可写。见 `runtime/run-stack.sh:4-36`。
 

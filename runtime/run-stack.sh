@@ -35,10 +35,29 @@ if ( : > "$input_probe" ) 2>/dev/null; then
   exit 74
 fi
 
-if [ ! -r /opt/data/.env ]; then
-  echo "FATAL: /opt/data/.env is missing or unreadable." >&2
+secret_source="${HERMES_SECRET_SOURCE_FILE:-/run/secrets/hermes.env}"
+secret_effective="${HERMES_SECRET_EFFECTIVE_FILE:-/run/hermes/hermes.env}"
+
+if [ ! -r "$secret_source" ]; then
+  echo "FATAL: secret source is missing or unreadable: $secret_source" >&2
   exit 75
 fi
+
+if [ -w "$secret_source" ]; then
+  echo "FATAL: secret source is writable; it must be a read-only host mount: $secret_source" >&2
+  exit 75
+fi
+
+if [ ! -d "$(dirname "$secret_effective")" ] || [ ! -w "$(dirname "$secret_effective")" ]; then
+  echo "FATAL: effective secret directory is missing or not writable: $(dirname "$secret_effective")" >&2
+  exit 75
+fi
+
+tmp_secret="${secret_effective}.tmp.$$"
+rm -f "$tmp_secret"
+cp "$secret_source" "$tmp_secret"
+chmod 0600 "$tmp_secret"
+mv -f "$tmp_secret" "$secret_effective"
 
 if [ ! -f /opt/data/config.yaml ]; then
   cp /opt/secure/config.default.yaml /opt/data/config.yaml

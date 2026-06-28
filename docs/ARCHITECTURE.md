@@ -15,6 +15,8 @@ netguard network namespace
        ├─ hermes dashboard (UID 10000)
        ├─ hermes gateway run --no-supervise (UID 10000)
        ├─ /input                read-only Windows bind
+       ├─ /run/secrets          read-only host secret source
+       ├─ /run/hermes           tmpfs runtime secret copy
        └─ /opt/data             writable Docker named volume
             ├─ workspace
             ├─ outbox
@@ -38,6 +40,10 @@ The Gateway remains running because it is responsible for messaging integrations
 ### Private writable state
 
 A Docker named volume maps only to `/opt/data`. It is considered untrusted and disposable. Hermes can destroy all of it.
+
+### Secrets
+
+`secrets/hermes.env` is mounted read-only at `/run/secrets/hermes.env`. The startup entrypoint copies it to `/run/hermes/hermes.env`, a tmpfs-backed effective file with mode `0600`, before the non-root supervisor loads it. Runtime changes to that effective file are temporary and are overwritten from the host source on restart.
 
 ### Explicit output
 

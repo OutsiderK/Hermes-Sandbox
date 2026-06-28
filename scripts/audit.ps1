@@ -124,11 +124,11 @@ $mountMap = @{}
 foreach ($mount in $hermes.Mounts) { $mountMap[$mount.Destination] = $mount }
 Expect ($mountMap.ContainsKey('/opt/data') -and $mountMap['/opt/data'].RW -and $mountMap['/opt/data'].Type -eq 'volume') 'State is a writable Docker volume at /opt/data.' '/opt/data state volume is missing, not a volume, or read-only.'
 Expect ($mountMap.ContainsKey('/input') -and -not $mountMap['/input'].RW -and $mountMap['/input'].Type -eq 'bind') '/input is a read-only bind mount.' '/input is not a read-only bind mount.'
-Expect ($mountMap.ContainsKey('/opt/data/.env') -and -not $mountMap['/opt/data/.env'].RW -and $mountMap['/opt/data/.env'].Type -eq 'bind') 'Secret file is a read-only bind mount.' 'Secret file is missing, writable, or not a bind mount.'
+Expect ($mountMap.ContainsKey('/run/secrets/hermes.env') -and -not $mountMap['/run/secrets/hermes.env'].RW -and $mountMap['/run/secrets/hermes.env'].Type -eq 'bind') 'Secret source is a read-only bind mount.' 'Secret source is missing, writable, or not a bind mount.'
 
-$allowedMounts = @('/opt/data', '/input', '/opt/data/.env')
+$allowedMounts = @('/opt/data', '/input', '/run/secrets/hermes.env')
 $unexpectedMounts = @($mountMap.Keys | Where-Object { $_ -notin $allowedMounts })
-Expect ($unexpectedMounts.Count -eq 0) 'Hermes has only the three approved persistent mounts.' "Unexpected Hermes mount destinations: $($unexpectedMounts -join ', ')"
+Expect ($unexpectedMounts.Count -eq 0) 'Hermes has only the approved state, input and secret-source mounts.' "Unexpected Hermes mount destinations: $($unexpectedMounts -join ', ')"
 
 $dangerPattern = '(?i)(docker[._-]?sock|docker_engine|DockerDesktop|\.ssh(?:[/\\]|$)|\.gnupg(?:[/\\]|$)|[/\\]Windows(?:[/\\]|$))'
 $dangerousSources = @($hermes.Mounts | Where-Object { [string]$_.Source -match $dangerPattern } | ForEach-Object { [string]$_.Source })
@@ -198,6 +198,12 @@ if ($LASTEXITCODE -eq 0) {
 
 & docker exec hermes-secure-hermes sh -c 'touch /opt/data/workspace/.__audit_state && rm /opt/data/workspace/.__audit_state'
 if ($LASTEXITCODE -eq 0) { Pass 'Hermes workspace remains writable.' } else { Fail 'Hermes workspace is not writable.' }
+
+& docker exec hermes-secure-hermes sh -c 'test -r /run/secrets/hermes.env && ! test -w /run/secrets/hermes.env'
+if ($LASTEXITCODE -eq 0) { Pass 'Secret source is readable but not writable in the container.' } else { Fail 'Secret source is missing or writable in the container.' }
+
+& docker exec hermes-secure-hermes sh -c 'test -f /run/hermes/hermes.env && test -w /run/hermes/hermes.env && test "$(stat -c %a /run/hermes/hermes.env)" = 600'
+if ($LASTEXITCODE -eq 0) { Pass 'Effective secret copy is writable, temporary, and mode 0600.' } else { Fail 'Effective secret copy is missing, not writable, or has unsafe permissions.' }
 
 $directTest = @'
 import socket

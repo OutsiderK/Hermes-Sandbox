@@ -176,6 +176,8 @@ services:
       PYTHONUSERBASE: /opt/data/.local
       NPM_CONFIG_PREFIX: /opt/data/.local
       XDG_CACHE_HOME: /opt/data/cache
+      HERMES_SECRET_SOURCE_FILE: /run/secrets/hermes.env
+      HERMES_SECRET_EFFECTIVE_FILE: /run/hermes/hermes.env
       HTTP_PROXY: http://127.0.0.1:3128
       HTTPS_PROXY: http://127.0.0.1:3128
       ALL_PROXY: http://127.0.0.1:3128
@@ -191,7 +193,7 @@ services:
           create_host_path: false
       - type: bind
         source: ./secrets/hermes.env
-        target: /opt/data/.env
+        target: /run/secrets/hermes.env
         read_only: true
         bind:
           create_host_path: false

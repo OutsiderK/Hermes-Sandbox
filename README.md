@@ -133,7 +133,9 @@ Hermes -> tinyproxy -> mihomo -> DIRECT 或订阅节点
 
 ## API Key 和 Token
 
-密钥文件以只读方式覆盖 `/opt/data/.env`，Hermes 与 Dashboard 都不能改写宿主机中的原始密钥文件。
+宿主机 `secrets\hermes.env` 以只读方式挂载到 `/run/secrets/hermes.env`。容器启动时会把它复制到 tmpfs 中的 `/run/hermes/hermes.env` 作为本次运行副本，Hermes 和 Dashboard 实际读取这个副本。
+
+这意味着容器内进程即使修改运行副本，也只影响当前容器生命周期；下次重启会重新用宿主机原文件覆盖。持久修改仍应从宿主机执行：
 
 例如设置 DeepSeek Key：
 
@@ -152,7 +154,7 @@ TELEGRAM_BOT_TOKEN
 
 请使用专用、最小权限、可撤销并设置额度限制的凭据。
 
-Dashboard 的密钥管理页面不应作为正式写入入口，因为 `.env` 被故意设为只读。更换 Dashboard 密码：
+Dashboard 的密钥管理页面不应作为正式持久写入入口；如果它能修改运行副本，该修改也会在容器重启后丢失。更换 Dashboard 密码：
 
 ```powershell
 .\scripts\hermes.ps1 dashboard-password

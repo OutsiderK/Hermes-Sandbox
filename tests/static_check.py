@@ -34,8 +34,10 @@ expect("ports" not in hermes, "Hermes service must not publish ports")
 
 mounts = {m["target"]: m for m in hermes.get("volumes", []) if isinstance(m, dict)}
 expect(mounts.get("/input", {}).get("read_only") is True, "/input must be read-only")
-expect(mounts.get("/opt/data/.env", {}).get("read_only") is True, "secret file must be read-only")
+expect(mounts.get("/run/secrets/hermes.env", {}).get("read_only") is True, "secret source must be read-only")
+expect(mounts.get("/run/secrets/hermes.env", {}).get("source") == "./secrets/hermes.env", "secret source bind target is unexpected")
 expect(any(isinstance(m, str) and m.endswith(":/opt/data") for m in hermes.get("volumes", [])), "state volume missing")
+expect("/run/hermes" in "\n".join(hermes.get("tmpfs", [])), "effective secret copy must live under /run/hermes tmpfs")
 
 ports = netguard.get("ports", [])
 expect(len(ports) == 2 and all(str(port).startswith("127.0.0.1:") for port in ports), "Published ports must bind host loopback")
@@ -69,11 +71,14 @@ for service_name, service in services.items():
 run_stack = (ROOT / "runtime/run-stack.sh").read_text(encoding="utf-8")
 expect('if [ "$(id -u)" -eq 0 ]' in run_stack, "runtime root assertion missing")
 expect("/input is writable" in run_stack, "input write assertion missing")
+expect("HERMES_SECRET_SOURCE_FILE" in run_stack and "HERMES_SECRET_EFFECTIVE_FILE" in run_stack, "runtime secret copy setup missing")
+expect("chmod 0600" in run_stack and "/run/hermes/hermes.env" in run_stack, "effective secret permissions missing")
 
 supervisor = (ROOT / "runtime/supervisor.py").read_text(encoding="utf-8")
 expect(re.search(r"[\"\']gateway[\"\']\s*,\s*\[\s*[\"\']hermes[\"\']\s*,\s*[\"\']gateway[\"\']\s*,\s*[\"\']run[\"\']\s*,\s*[\"\']--no-supervise[\"\']", supervisor, re.S) is not None, "gateway foreground command missing")
 expect('"--host",\n                "0.0.0.0"' in supervisor, "dashboard container bind missing")
 expect("scrypt$" in supervisor, "dashboard hash validation missing")
+expect("HERMES_SECRET_EFFECTIVE_FILE" in supervisor, "supervisor must read the effective secret copy")
 
 netguard_script = (ROOT / "netguard/entrypoint.sh").read_text(encoding="utf-8")
 expect("--uid-owner \"$HERMES_UID\" -j REJECT" in netguard_script, "Hermes direct egress reject missing")

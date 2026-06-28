@@ -116,7 +116,9 @@ The script prints `http://127.0.0.1:9090` plus the controller secret, then opens
 
 ## API keys and tokens
 
-The secret file is mounted read-only, so Hermes and the Dashboard cannot silently rewrite it. Set a key from the host:
+The host `secrets\hermes.env` file is mounted read-only at `/run/secrets/hermes.env`. At container startup, the entrypoint copies it into the tmpfs-backed `/run/hermes/hermes.env`, and Hermes reads that runtime copy.
+
+If a container process changes the runtime copy, the change lasts only for the current container lifecycle. The next restart overwrites it from the read-only host source. Persist a key from the host:
 
 ```powershell
 .\scripts\hermes.ps1 secret-set DEEPSEEK_API_KEY
@@ -124,7 +126,7 @@ The secret file is mounted read-only, so Hermes and the Dashboard cannot silentl
 
 Then choose the provider/model in the Dashboard. Repeat for other variables such as `OPENROUTER_API_KEY` or `TELEGRAM_BOT_TOKEN`.
 
-The Dashboard's API-key page may be able to display environment-backed availability, but it must not be used to persist keys because `/opt/data/.env` is intentionally read-only.
+The Dashboard's API-key page may be able to modify the runtime copy, but it must not be used to persist keys because restart restores the host source file.
 
 Rotate the Dashboard login:
 

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Dict
 
-SECRET_FILE = Path("/opt/data/.env")
+SECRET_FILE = Path(os.environ.get("HERMES_SECRET_EFFECTIVE_FILE", "/run/hermes/hermes.env"))
 STATE_FILE = Path("/tmp/hermes-supervisor.json")
 REQUIRED_DASHBOARD_VARS = (
     "HERMES_DASHBOARD_BASIC_AUTH_USERNAME",

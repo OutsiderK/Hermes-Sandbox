@@ -47,7 +47,7 @@ A secret used by Hermes cannot be hidden from a fully compromised Hermes process
 - independently revocable;
 - unable to administer the host or Docker environment.
 
-The host secret file is read-only to Hermes, preventing persistence changes, but its values are inherited by Hermes child processes when needed.
+The host secret file is read-only to Hermes at `/run/secrets/hermes.env`. Startup copies it to the tmpfs-backed `/run/hermes/hermes.env`, which is the effective runtime file inherited by Hermes child processes. A compromised process can change that runtime copy, but restart replaces it from the host source.
 
 ## Residual risks
 
