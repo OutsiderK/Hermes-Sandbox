@@ -78,6 +78,27 @@ function Invoke-Docker([string[]]$Arguments, [switch]$Capture) {
     }
 }
 
+function Invoke-DockerWithRetry([string[]]$Arguments, [int]$Attempts = 4) {
+    $lastOutput = ''
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        $output = & docker @Arguments 2>&1
+        $lastOutput = ($output | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+        if ($attempt -lt $Attempts) {
+            $delay = [int][Math]::Min(30, [Math]::Pow(2, $attempt))
+            Write-Warn "docker $($Arguments -join ' ') failed on attempt $attempt/$Attempts. Retrying in $delay seconds."
+            if ($lastOutput) {
+                Write-Warn $lastOutput
+            }
+            Start-Sleep -Seconds $delay
+        }
+    }
+
+    throw "docker $($Arguments -join ' ') failed after $Attempts attempt(s). This is usually a network or registry download problem. Last output:`n$lastOutput"
+}
+
 function Invoke-Compose([string[]]$Arguments, [switch]$Capture) {
     $all = @('compose', '--file', $ComposeFile) + $Arguments
     return Invoke-Docker -Arguments $all -Capture:$Capture
@@ -262,17 +283,47 @@ function Initialize-Layout {
     Assert-HostPathLayout
 }
 
-function Resolve-ImageDigest([string]$SourceImage) {
+function Test-ImageDigestRef([string]$ImageRef) {
+    return $ImageRef -match '@sha256:[0-9a-f]{64}$'
+}
+
+function Get-LocalImageDigest([string]$SourceImage) {
+    try {
+        $digest = Invoke-Docker -Arguments @('image', 'inspect', '--format', '{{index .RepoDigests 0}}', $SourceImage) -Capture
+        if (Test-ImageDigestRef $digest) {
+            return $digest
+        }
+    }
+    catch {
+        return ''
+    }
+    return ''
+}
+
+function Resolve-ImageDigest([string]$SourceImage, [string]$ExistingRef = '', [switch]$ForcePull) {
+    if (-not $ForcePull -and (Test-ImageDigestRef $ExistingRef)) {
+        Write-Ok "Using existing locked digest for $SourceImage"
+        return $ExistingRef
+    }
+
+    if (-not $ForcePull) {
+        $localDigest = Get-LocalImageDigest $SourceImage
+        if ($localDigest) {
+            Write-Ok "Using locally cached digest for $SourceImage"
+            return $localDigest
+        }
+    }
+
     Write-Info "Pulling and locking $SourceImage"
-    Invoke-Docker -Arguments @('pull', $SourceImage)
+    Invoke-DockerWithRetry -Arguments @('pull', $SourceImage)
     $digest = Invoke-Docker -Arguments @('image', 'inspect', '--format', '{{index .RepoDigests 0}}', $SourceImage) -Capture
-    if ($digest -notmatch '@sha256:[0-9a-f]{64}$') {
-        throw "Docker did not return an immutable RepoDigest for $SourceImage: $digest"
+    if (-not (Test-ImageDigestRef $digest)) {
+        throw "Docker did not return an immutable RepoDigest for ${SourceImage}: $digest"
     }
     return $digest
 }
 
-function Lock-Images {
+function Lock-Images([switch]$ForcePull) {
     Initialize-Layout
     $envMap = Read-KeyValueFile $DotEnvPath
     foreach ($required in @('HERMES_SOURCE_IMAGE', 'NETGUARD_SOURCE_IMAGE', 'STATE_INIT_SOURCE_IMAGE', 'MIHOMO_SOURCE_IMAGE')) {
@@ -281,16 +332,29 @@ function Lock-Images {
         }
     }
 
-    $hermesRef = Resolve-ImageDigest $envMap['HERMES_SOURCE_IMAGE']
-    $netguardRef = Resolve-ImageDigest $envMap['NETGUARD_SOURCE_IMAGE']
-    $stateRef = Resolve-ImageDigest $envMap['STATE_INIT_SOURCE_IMAGE']
-    $mihomoRef = Resolve-ImageDigest $envMap['MIHOMO_SOURCE_IMAGE']
+    foreach ($pair in @(
+        @('HERMES_SOURCE_IMAGE', 'HERMES_IMAGE_REF'),
+        @('NETGUARD_SOURCE_IMAGE', 'NETGUARD_IMAGE_REF'),
+        @('STATE_INIT_SOURCE_IMAGE', 'STATE_INIT_IMAGE_REF'),
+        @('MIHOMO_SOURCE_IMAGE', 'MIHOMO_IMAGE_REF')
+    )) {
+        $sourceKey = $pair[0]
+        $refKey = $pair[1]
+        $existingRef = ''
+        if ($envMap.Contains($refKey)) {
+            $existingRef = $envMap[$refKey]
+        }
+        $ref = Resolve-ImageDigest -SourceImage $envMap[$sourceKey] -ExistingRef $existingRef -ForcePull:$ForcePull
+        Set-KeyValue $DotEnvPath $refKey $ref
+        $envMap[$refKey] = $ref
+    }
 
-    Set-KeyValue $DotEnvPath 'HERMES_IMAGE_REF' $hermesRef
-    Set-KeyValue $DotEnvPath 'NETGUARD_IMAGE_REF' $netguardRef
-    Set-KeyValue $DotEnvPath 'STATE_INIT_IMAGE_REF' $stateRef
-    Set-KeyValue $DotEnvPath 'MIHOMO_IMAGE_REF' $mihomoRef
-    Write-Ok 'Image references are locked to immutable SHA-256 digests.'
+    if ($ForcePull) {
+        Write-Ok 'Image references were refreshed and locked to immutable SHA-256 digests.'
+    }
+    else {
+        Write-Ok 'Image references are locked to immutable SHA-256 digests.'
+    }
 }
 
 function Assert-Initialized {
@@ -737,7 +801,7 @@ try {
             }
         }
         'update' {
-            Lock-Images
+            Lock-Images -ForcePull
             Build-Images
             if (Get-ContainerRunning 'hermes-secure-hermes') {
                 Stop-Stack
