@@ -415,7 +415,7 @@ function Set-DashboardPassword {
     $plainTwo = Convert-SecureStringToPlain $passwordTwo
     try {
         if ($plainOne -cne $plainTwo) { throw 'Passwords do not match.' }
-        if ($plainOne.Length -lt 14) { throw 'Use a dashboard password of at least 14 characters.' }
+        if ($plainOne.Length -lt 8) { throw 'Use a dashboard password of at least 8 characters.' }
 
         $hashOutput = $plainOne | & docker run --rm -i --user 10000:10000 --entrypoint python $runtimeImage -c "import sys; from plugins.dashboard_auth.basic import hash_password; print(hash_password(sys.stdin.read().rstrip('\r\n')))" 2>&1
         if ($LASTEXITCODE -ne 0) {

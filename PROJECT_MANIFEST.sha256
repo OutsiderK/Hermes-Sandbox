@@ -24,8 +24,8 @@ fde9132db4f3e091d7cf30bc7f3bec7cd00348fa24d5ec537feaa2b60d00de45  ./runtime/expo
 56685807d85a8f7875b72465d2f21a39703e5b4228ec32362553c78d9ffde84c  ./runtime/healthcheck.py
 1d6aa01c3600a811dba31fe0a8879c221c1558ca9b2237bd9b0c9399a1b4e2ab  ./runtime/run-stack.sh
 5b6801c961289e6fd0d167af20b73fc6efd1045e73f1200d55f66707eb8d9ec7  ./runtime/supervisor.py
-335da3f5620e52c6cc50a0826bd37069f15e8406bc29cd24f03f244bdec9a5c1  ./scripts/audit.ps1
-82862033fbfcbc6252b9d5e26d5849dffc43b89de2c46bc3f61a7fdf8a5229b1  ./scripts/hermes.ps1
+6e073b2a4af5fca83b0a3be3119dfdc8a57710f0aa61153dc3d2b0678199179e  ./scripts/audit.ps1
+d632e17694720ec8cf9f6ce84f86e4e2e0fde17e61aaea60a51ccc24193eac05  ./scripts/hermes.ps1
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./secrets/.gitkeep
 e3d11cdaed2be130a8015cd92804afb03af144d4635432067bf6c1ecd7724d1a  ./secrets/README.txt
 bc599f07589c0971a1e599dce1127e643cb40cd9799720bb14d1bbf3d17b5043  ./secrets/hermes.env.example

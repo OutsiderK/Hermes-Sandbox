@@ -34,6 +34,14 @@ function Expect([bool]$Condition, [string]$Good, [string]$Bad) {
     if ($Condition) { Pass $Good } else { Fail $Bad }
 }
 
+function Normalize-CapabilityName([string]$Name) {
+    $normalized = $Name.ToUpperInvariant()
+    if ($normalized.StartsWith('CAP_')) {
+        $normalized = $normalized.Substring(4)
+    }
+    return $normalized
+}
+
 function Get-NormalizedFullPath([string]$Path) {
     $trimChars = @(
         [System.IO.Path]::DirectorySeparatorChar,
@@ -133,9 +141,11 @@ Expect $portOk 'Dashboard is published only on host loopback.' 'Dashboard is not
 $controllerBindings = $netguard.HostConfig.PortBindings.'9090/tcp'
 $controllerPortOk = $controllerBindings -and $controllerBindings.Count -eq 1 -and $controllerBindings[0].HostIp -eq '127.0.0.1'
 Expect $controllerPortOk 'mihomo controller is published only on host loopback.' 'mihomo controller is not restricted to 127.0.0.1.'
-$expectedNetguardCaps = @('NET_ADMIN', 'SETGID', 'SETUID')
-$actualNetguardCaps = @($netguard.HostConfig.CapAdd | Sort-Object)
-Expect (@(Compare-Object ($expectedNetguardCaps | Sort-Object) $actualNetguardCaps).Count -eq 0 -and ($netguard.HostConfig.CapDrop -contains 'ALL')) 'Netguard has only NET_ADMIN plus temporary UID/GID drop capabilities.' 'Netguard capability set is unexpected.'
+$expectedNetguardCaps = @('NET_ADMIN', 'SETGID', 'SETUID') | Sort-Object
+$actualNetguardCaps = @($netguard.HostConfig.CapAdd | ForEach-Object { Normalize-CapabilityName ([string]$_) } | Sort-Object)
+$actualNetguardDrops = @($netguard.HostConfig.CapDrop | ForEach-Object { Normalize-CapabilityName ([string]$_) })
+$netguardCapsOk = @(Compare-Object $expectedNetguardCaps $actualNetguardCaps).Count -eq 0 -and ($actualNetguardDrops -contains 'ALL')
+Expect $netguardCapsOk 'Netguard has only NET_ADMIN plus temporary UID/GID drop capabilities.' "Netguard capability set is unexpected. CapAdd=$($actualNetguardCaps -join ',') CapDrop=$($actualNetguardDrops -join ',')"
 Expect (-not $netguard.Mounts -or $netguard.Mounts.Count -eq 0) 'Netguard has no filesystem mounts.' 'Netguard unexpectedly has filesystem mounts.'
 Expect (-not $netguard.HostConfig.Devices -or $netguard.HostConfig.Devices.Count -eq 0) 'Netguard has no host device passthrough.' 'Netguard has host device passthrough.'
 $netguardPidOneUid = Docker-Capture @('exec', 'hermes-secure-netguard', 'sh', '-c', "awk '/^Uid:/ {print `$2}' /proc/1/status")
