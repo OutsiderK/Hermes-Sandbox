@@ -28,6 +28,12 @@ iptables -w -A OUTPUT -m owner --uid-owner "$HERMES_UID" -d 127.0.0.11/32 -p tcp
 iptables -w -A OUTPUT -m owner --uid-owner "$HERMES_UID" -o lo -p tcp -m multiport --dports "$HERMES_LOOPBACK_TCP_PORTS" -j ACCEPT
 iptables -w -A OUTPUT -m owner --uid-owner "$HERMES_UID" -j REJECT --reject-with icmp-port-unreachable
 
+# Docker's embedded DNS is hosted at 127.0.0.11 inside the shared namespace.
+# Some sidecar sockets are not reliably classified by owner match during early
+# bootstrap, so allow only DNS here and keep real egress constrained below.
+iptables -w -A OUTPUT -d 127.0.0.11/32 -p udp --dport 53 -j ACCEPT
+iptables -w -A OUTPUT -d 127.0.0.11/32 -p tcp --dport 53 -j ACCEPT
+
 # tinyproxy may only forward to the local mihomo HTTP proxy. It does not get
 # direct DNS or Internet access.
 iptables -w -A OUTPUT -m owner --uid-owner "$PROXY_UID" -o lo -p tcp --dport 7890 -j ACCEPT
@@ -69,6 +75,8 @@ iptables -w -A OUTPUT -j REJECT --reject-with icmp-port-unreachable
 # Assert the most important policy before dropping into tinyproxy.
 iptables -w -C OUTPUT -m owner --uid-owner "$HERMES_UID" -j REJECT --reject-with icmp-port-unreachable
 iptables -w -C OUTPUT -m owner --uid-owner "$HERMES_UID" -o lo -p tcp -m multiport --dports "$HERMES_LOOPBACK_TCP_PORTS" -j ACCEPT
+iptables -w -C OUTPUT -d 127.0.0.11/32 -p udp --dport 53 -j ACCEPT
+iptables -w -C OUTPUT -d 127.0.0.11/32 -p tcp --dport 53 -j ACCEPT
 iptables -w -C OUTPUT -m owner --uid-owner "$PROXY_UID" -o lo -p tcp --dport 7890 -j ACCEPT
 iptables -w -C OUTPUT -m owner --uid-owner "$MIHOMO_UID" -p tcp -m multiport --dports "$MIHOMO_TCP_PORTS" -j ACCEPT
 

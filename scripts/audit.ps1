@@ -169,6 +169,8 @@ Expect ($mihomoDangerousSources.Count -eq 0) 'mihomo has no dangerous host mount
 
 $hermesLoopbackRule = Docker-Capture @('exec', 'hermes-secure-netguard', 'sh', '-c', 'iptables -w -C OUTPUT -m owner --uid-owner 10000 -o lo -p tcp -m multiport --dports "$HERMES_LOOPBACK_TCP_PORTS" -j ACCEPT && echo ok')
 Expect ($hermesLoopbackRule -eq 'ok') 'Hermes UID has only the audited local TCP port allowlist.' 'Hermes loopback TCP allowlist rule is missing.'
+$dockerDnsRule = Docker-Capture @('exec', 'hermes-secure-netguard', 'sh', '-c', 'iptables -w -C OUTPUT -d 127.0.0.11/32 -p udp --dport 53 -j ACCEPT && iptables -w -C OUTPUT -d 127.0.0.11/32 -p tcp --dport 53 -j ACCEPT && echo ok')
+Expect ($dockerDnsRule -eq 'ok') 'Docker embedded DNS is available for sidecar bootstrap only.' 'Docker embedded DNS bootstrap rule is missing.'
 $tinyproxyRule = Docker-Capture @('exec', 'hermes-secure-netguard', 'sh', '-c', 'iptables -w -C OUTPUT -m owner --uid-owner 10001 -o lo -p tcp --dport 7890 -j ACCEPT && echo ok')
 Expect ($tinyproxyRule -eq 'ok') 'tinyproxy UID can only reach local mihomo proxy port.' 'tinyproxy-to-mihomo firewall rule is missing.'
 $mihomoPublicRule = Docker-Capture @('exec', 'hermes-secure-netguard', 'sh', '-c', 'iptables -w -C OUTPUT -m owner --uid-owner 10002 -p tcp -m multiport --dports "$MIHOMO_TCP_PORTS" -j ACCEPT && echo ok')

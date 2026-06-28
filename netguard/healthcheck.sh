@@ -11,6 +11,8 @@ uid="$(awk '/^Uid:/ {print $2}' "/proc/$pid/status")"
 [ "$uid" = "$PROXY_UID" ]
 iptables -w -C OUTPUT -m owner --uid-owner "$HERMES_UID" -j REJECT --reject-with icmp-port-unreachable
 iptables -w -C OUTPUT -m owner --uid-owner "$HERMES_UID" -o lo -p tcp -m multiport --dports "$HERMES_LOOPBACK_TCP_PORTS" -j ACCEPT
+iptables -w -C OUTPUT -d 127.0.0.11/32 -p udp --dport 53 -j ACCEPT
+iptables -w -C OUTPUT -d 127.0.0.11/32 -p tcp --dport 53 -j ACCEPT
 iptables -w -C OUTPUT -m owner --uid-owner "$PROXY_UID" -o lo -p tcp --dport 7890 -j ACCEPT
 iptables -w -C OUTPUT -m owner --uid-owner "$MIHOMO_UID" -p tcp -m multiport --dports "$MIHOMO_TCP_PORTS" -j ACCEPT
 iptables -w -C OUTPUT -m owner --uid-owner "$MIHOMO_UID" -d 169.254.0.0/16 -j REJECT --reject-with icmp-port-unreachable
